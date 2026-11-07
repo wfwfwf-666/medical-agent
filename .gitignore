@@ -1,0 +1,11 @@
+.env
+.env.bak
+.venv/
+__pycache__/
+*.pyc
+.idea/
+experiments/datasets/*.csv
+*.log
+tmp_check.py
+*.db
+.pytest_cache/
