@@ -17,8 +17,51 @@ SYSTEM_PROMPT = """你是医疗健康问答助手，服务对象是普通患者�
 9. 只回答资料中出现的内容，不要补充背景知识"""
 
 
-# 3.把检索片段拼成给模型看的上下文
+# 3.上下文组装：去重 + 字数预算 + 来源标注
+MAX_CONTEXT_CHARS = 3000     # 拼进 prompt 的资料总字数上限
+MIN_DOCS = 3                 # 去重后至少保留这么多条，避免上下文被删空
+
+
+def dedup_docs(docs):
+    kept = []
+    for new_doc in docs:
+        new_text = new_doc["text"].replace("\n", "").replace(" ", "")
+
+        is_duplicate = False
+        for old_doc in kept:
+            old_text = old_doc["text"].replace("\n", "").replace(" ", "")
+            if new_text in old_text:
+                is_duplicate = True
+                break
+
+        if is_duplicate == False:
+            kept.append(new_doc)
+
+    return kept
+
+
+def trim_by_budget(docs: list[dict], max_chars: int = MAX_CONTEXT_CHARS) -> list[dict]:
+    """按相关性顺序累加，超出总字数预算的片段丢弃"""
+    kept = []
+    total = 0
+    for d in docs:
+        length = len(d["text"])
+        if kept and total + length > max_chars:
+            continue
+        kept.append(d)
+        total += length
+    return kept
+
+
 def build_context(docs: list[dict]) -> tuple[str, list[str]]:
+    # 1) 去重：去重后剩太少就放弃，避免上下文过短
+    deduped = dedup_docs(docs)
+    if len(deduped) >= MIN_DOCS:
+        docs = deduped
+
+    # 2) 预算截断：控制总字数，避免 prompt 过长
+    docs = trim_by_budget(docs)
+
     parts = []
     for i, d in enumerate(docs, 1):
         parts.append(
